@@ -1,0 +1,23 @@
+# Python environments
+.venv/
+venv/
+env/
+
+# Editor and IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Optional build artifacts
+dist/
+build/
+node_modules/
+
+# Tooling cache/config
+prepros-6.config

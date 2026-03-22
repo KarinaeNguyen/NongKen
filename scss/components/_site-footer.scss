@@ -1,0 +1,79 @@
+.site-footer {
+	background: $secondary;
+	font-size: 14px;	
+	color: $white;
+	padding: 70px 0;
+
+
+	a {
+		color: rgba($white, .92);
+		position: relative;
+		display: inline-block;
+		text-decoration: underline;
+		&:hover {
+			color: $white;
+			text-decoration: none;
+			&:before {
+					background: rgba($white, .92);
+			}
+		}
+	}
+
+	.footer-cta {
+		h2 {
+			font-size: 30px;
+			color: $white;
+		}
+	}
+	.btn {
+		&:before {
+			display: none;
+		}
+	}
+	.widget {
+		margin-bottom: 40px;
+		display: block;
+		h3 {
+			font-size: 12px;
+			font-weight: 700;
+			text-transform: uppercase;
+			margin-bottom: 15px;
+			color: $white;
+		}
+
+		.links {
+			width: 150px;
+			li {
+				margin-bottom: 10px;
+			}
+		}
+	}
+
+	.social {
+		li {
+			display: inline-block;
+			a {
+				display: inline-block;
+				width: 40px;
+				height: 40px;
+				position: relative;
+				background: rgba($white, .2);
+				color: $white;
+				border-radius: 40%;
+				&:before {
+					display: none;
+				}
+				> span {
+					position: absolute;
+					top: 50%;
+					left: 50%;
+					transform: translate(-50%, -50%);
+				}
+				&:hover {
+					background: $white;
+					color: $secondary;
+				}
+			}
+		}
+	}
+}
