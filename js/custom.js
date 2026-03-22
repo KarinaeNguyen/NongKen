@@ -444,6 +444,9 @@
 		var volumeStorageKey = 'nkBackgroundMusicVolume';
 		var muteStorageKey = 'nkBackgroundMusicMuted';
 		var collapsedStorageKey = 'nkBackgroundMusicCollapsed';
+		var positionStorageKey = 'nkBackgroundMusicPosition';
+		var resumePendingStorageKey = 'nkBackgroundMusicResumePending';
+		var resumeAtStorageKey = 'nkBackgroundMusicResumeAt';
 		var defaultVolumePercent = 35;
 
 		var parsePercent = function(raw, fallbackPercent) {
@@ -465,6 +468,13 @@
 		var muted = storage.get(muteStorageKey) === 'true';
 		var collapsed = storage.get(collapsedStorageKey) === 'true';
 		var lastNonZero = volumePercent > 0 ? volumePercent : defaultVolumePercent;
+		var savedPositionRaw = storage.get(positionStorageKey);
+		var savedPositionParsed = parseFloat(savedPositionRaw);
+		var savedPositionSeconds = (!isNaN(savedPositionParsed) && savedPositionParsed >= 0) ? savedPositionParsed : 0;
+		var resumePending = storage.get(resumePendingStorageKey) === 'true';
+		var resumeAtParsed = parseInt(storage.get(resumeAtStorageKey), 10);
+		var resumeAtMs = (!isNaN(resumeAtParsed) && resumeAtParsed >= 0) ? resumeAtParsed : 0;
+		var resumeIsFresh = resumePending && resumeAtMs > 0 && (Date.now() - resumeAtMs <= 15000);
 
 		var audio = document.getElementById('nk-background-audio');
 		if (!audio) {
@@ -478,6 +488,53 @@
 		audio.preload = 'auto';
 		audio.muted = muted;
 		audio.volume = muted ? 0 : (volumePercent / 100);
+
+		var hasAppliedResumePosition = false;
+		var applySavedPosition = function() {
+			if (hasAppliedResumePosition || savedPositionSeconds <= 0 || audio.readyState < 1) {
+				return;
+			}
+			try {
+				var targetTime = savedPositionSeconds;
+				if (isFinite(audio.duration) && audio.duration > 0) {
+					var maxResumeTime = audio.duration - 0.5;
+					if (maxResumeTime <= 0) {
+						hasAppliedResumePosition = true;
+						return;
+					}
+					if (targetTime > maxResumeTime) {
+						targetTime = maxResumeTime;
+					}
+				}
+				if (targetTime > 0) {
+					audio.currentTime = targetTime;
+				}
+				hasAppliedResumePosition = true;
+			} catch (error) {
+			}
+		};
+		if (audio.readyState >= 1) {
+			applySavedPosition();
+		} else {
+			audio.addEventListener('loadedmetadata', applySavedPosition);
+		}
+
+		var persistPosition = function() {
+			var currentTime = audio.currentTime;
+			if (isFinite(currentTime) && currentTime > 0) {
+				storage.set(positionStorageKey, currentTime.toFixed(2));
+			}
+		};
+
+		var markResumePending = function() {
+			storage.set(resumePendingStorageKey, 'true');
+			storage.set(resumeAtStorageKey, String(Date.now()));
+		};
+
+		var clearResumePending = function() {
+			storage.set(resumePendingStorageKey, 'false');
+			storage.set(resumeAtStorageKey, '0');
+		};
 
 		var player = document.createElement('section');
 		player.id = 'nk-mini-player';
@@ -577,6 +634,7 @@
 			audio.volume = 0;
 
 			audio.play().then(function() {
+				clearResumePending();
 				if (targetVolume > 0) {
 					fadeTo(targetVolume, 500, function() {
 						audio.muted = muted;
@@ -618,6 +676,7 @@
 			} else {
 				enabled = false;
 				storage.set(playStorageKey, 'false');
+				clearResumePending();
 				pausePlayback();
 			}
 		};
@@ -661,6 +720,13 @@
 			audio.muted = muted;
 			audio.volume = muted ? 0 : (volumePercent / 100);
 			refreshUI();
+		};
+
+		var markResumeFromCurrentState = function() {
+			if (enabled && !audio.paused) {
+				persistPosition();
+				markResumePending();
+			}
 		};
 
 		var isTypingTarget = function(target) {
@@ -707,6 +773,35 @@
 			}
 		});
 
+		document.addEventListener('click', function(event) {
+			var link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+			if (!link) {
+				return;
+			}
+			var href = (link.getAttribute('href') || '').trim();
+			if (!href) {
+				return;
+			}
+			var lowerHref = href.toLowerCase();
+			if (lowerHref.indexOf('javascript:') === 0 || href.charAt(0) === '#') {
+				return;
+			}
+			markResumeFromCurrentState();
+		}, true);
+
+		window.addEventListener('pagehide', markResumeFromCurrentState);
+		window.addEventListener('beforeunload', markResumeFromCurrentState);
+
+		var lastPositionPersistAt = 0;
+		audio.addEventListener('timeupdate', function() {
+			var now = Date.now();
+			if (now - lastPositionPersistAt < 2000) {
+				return;
+			}
+			lastPositionPersistAt = now;
+			persistPosition();
+		});
+
 		var firstInteractionHandled = false;
 		var onFirstInteraction = function() {
 			if (firstInteractionHandled) {
@@ -720,6 +815,10 @@
 			document.removeEventListener('touchstart', onFirstInteraction);
 			document.removeEventListener('keydown', onFirstInteraction);
 		};
+
+		if (enabled && resumeIsFresh && audio.paused) {
+			startPlayback();
+		}
 
 		document.addEventListener('pointerdown', onFirstInteraction);
 		document.addEventListener('touchstart', onFirstInteraction);
